@@ -2,6 +2,7 @@
 #include "delay.h"
 #include "usart.h"
 #include "led.h"
+#include "adc.h"
 #include "FreeRTOS.h"
 #include "task.h"
 /************************************************
@@ -39,12 +40,22 @@ TaskHandle_t LED1Task_Handler;
 //任务函数
 void led1_task(void *pvParameters);
 
+//任务优先级
+#define ADC_TASK_PRIO			4
+//任务堆栈大小	
+#define ADC_STK_SIZE 		50  
+//任务句柄
+TaskHandle_t ADCTask_Handler;
+//任务函数
+void adc_task(void *pvParameters);
+
 int main(void)
 {
 	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_4);//设置系统中断优先级分组4	 
 	delay_init();	    				//延时函数初始化	  
 	uart_init(115200);					//初始化串口
 	LED_Init();		  					//初始化LED
+	Adc_Init();		  					//ADC初始化
 	printf("Running!\r\n");
 	 
 	//创建开始任务
@@ -75,7 +86,15 @@ void start_task(void *pvParameters)
                 (uint16_t       )LED1_STK_SIZE, 
                 (void*          )NULL,
                 (UBaseType_t    )LED1_TASK_PRIO,
-                (TaskHandle_t*  )&LED1Task_Handler);         
+                (TaskHandle_t*  )&LED1Task_Handler);  
+		//创建ADC采集任务
+    xTaskCreate((TaskFunction_t )adc_task,     
+                (const char*    )"adc_task",   
+                (uint16_t       )ADC_STK_SIZE, 
+                (void*          )NULL,
+                (UBaseType_t    )ADC_TASK_PRIO,
+                (TaskHandle_t*  )&ADCTask_Handler); 
+								
     vTaskDelete(StartTask_Handler); //删除开始任务
     taskEXIT_CRITICAL();            //退出临界区
 }
@@ -88,16 +107,28 @@ void led0_task(void *pvParameters)
         LED0=~LED0;
         vTaskDelay(1000);
     }
-}   
+}
 
-//LED1任务函数
+//LED0任务函数 
 void led1_task(void *pvParameters)
 {
     while(1)
     {
-        LED1=0;
+        LED1=~LED1;
         vTaskDelay(200);
-        LED1=1;
+				LED1=~LED1;
         vTaskDelay(800);
     }
-}
+}   
+
+//PB1模拟量采集
+void adc_task(void *pvParameters)
+{
+		uint16_t value;  
+		while(1)
+    {
+				value=Get_Adc_Average(ADC_Channel_9,10);
+				printf("ADC Value:%d\r\n",value);
+				vTaskDelay(500);			
+    }
+}   
